@@ -1,7 +1,13 @@
 from dataclasses import dataclass
+import json
+from pathlib import Path
 
 @dataclass
 class Settings:
+    # Paths persistence
+    input_path: str = ""
+    output_path: str = ""
+
     # Input behavior
     input_recursive: bool = False
     handle_ico: bool = False
@@ -48,3 +54,31 @@ class Settings:
     do_export: bool = True
     export_width: int = 512
     export_area_drawing: bool = True
+
+    # UI Theme
+    theme: str = "System"  # "System" | "Dark" | "Light"
+
+    def save(self, path: Path | str = "settings.json") -> None:
+        from dataclasses import asdict
+        try:
+            p = Path(path)
+            with open(p, "w", encoding="utf-8") as f:
+                json.dump(asdict(self), f, indent=4)
+        except Exception:
+            pass
+
+    @classmethod
+    def load(cls, path: Path | str = "settings.json") -> "Settings":
+        try:
+            p = Path(path)
+            if p.exists():
+                with open(p, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                import dataclasses
+                fields = {f.name for f in dataclasses.fields(cls)}
+                filtered = {k: v for k, v in data.items() if k in fields}
+                return cls(**filtered)
+        except Exception:
+            pass
+        return cls()
+

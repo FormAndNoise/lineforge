@@ -67,9 +67,14 @@ Remove-IfExists $DistDir
 Remove-IfExists ".\$AppName.spec"
 
 Write-Host "`nUpgrading pip + installing build deps..." -ForegroundColor Cyan
-python -m pip install --upgrade pip | Out-Host
-python -m pip install --upgrade pyinstaller | Out-Host
-if (Test-Path ".\requirements.txt") { python -m pip install -r requirements.txt | Out-Host }
+py -m pip install --upgrade pip | Out-Host
+py -m pip install --upgrade pyinstaller | Out-Host
+if (Test-Path ".\requirements.txt") { py -m pip install -r requirements.txt | Out-Host }
+
+# Dynamically locate customtkinter path to bundle it
+Write-Host "`nLocating customtkinter installation path..." -ForegroundColor Cyan
+$CtkPath = (py -c "import customtkinter, os; print(os.path.dirname(customtkinter.__file__))").Trim()
+Write-Host "CustomTkinter found at: $CtkPath"
 
 # PyInstaller args:
 # - --onefile: single exe (what your README claims for release)
@@ -96,6 +101,9 @@ $Args = @(
 # Bundle potrace into the app under bin\
 $Args += @("--add-binary", "$PotraceAbs;bin")
 
+# Bundle customtkinter assets
+$Args += @("--add-data", "$CtkPath;customtkinter")
+
 # Bundle NOTICE + Licenses if present
 if ($NoticeAbs)   { $Args += @("--add-data", "$NoticeAbs;.") }
 if ($LicensesAbs) { $Args += @("--add-data", "$LicensesAbs;$LicensesFolderName") }
@@ -104,7 +112,7 @@ if ($LicensesAbs) { $Args += @("--add-data", "$LicensesAbs;$LicensesFolderName")
 $Args += $Entry
 
 Write-Host "`nRunning PyInstaller (RELEASE)..." -ForegroundColor Cyan
-python @Args | Out-Host
+py @Args | Out-Host
 
 # PyInstaller onefile output path:
 $Exe = Join-Path $DistDir "$AppName.exe"
