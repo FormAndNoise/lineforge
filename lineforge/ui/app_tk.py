@@ -1,4 +1,5 @@
 import os
+import re
 import tkinter as tk
 from tkinter import filedialog, messagebox
 from pathlib import Path
@@ -8,8 +9,11 @@ import threading
 
 from ..settings import Settings
 from ..utils import list_images
-from ..pipeline import run_all
+from ..pipeline import run_all, cancel_pipeline, PipelineResult
 from .theme import get_theme_path
+from ..deps import find_vpipe
+
+LOG_FILENAME_PATTERN = re.compile(r'\[\d+/\d+\]\s*(.+\.(png|jpg|jpeg|svg|pdf|eps))')
 
 
 class LabeledSlider(ctk.CTkFrame):
@@ -166,18 +170,22 @@ class App(ctk.CTk):
         self.geometry("1040x860")
         self.minsize(980, 760)
 
-        # Load persisted settings
         self.s = Settings.load()
         ctk.set_appearance_mode(self.s.theme)
         ctk.set_default_color_theme(get_theme_path())
 
         self._log_fh = None
         self._log_path = None
+        self._cancel_event = threading.Event()
+        self._total_files = 0
+        self._current_file = 0
+        self._result: PipelineResult | None = None
 
         self._build_ui()
         self.start_new_log_session()
 
-        # Initial validations & refresh
+        self._check_dependencies()
+        self._load_recent_inputs()
         self.on_input_path_changed()
         self.refresh_found_count()
         self.card_a.update_widgets_state()
@@ -186,6 +194,7 @@ class App(ctk.CTk):
         self.card_d.update_widgets_state()
 
         self.protocol("WM_DELETE_WINDOW", self.on_close)
+        self._setup_keyboard_shortcuts()
 
     def _build_ui(self):
         # --- TOP FRAME (Paths & General) ---
@@ -267,8 +276,35 @@ class App(ctk.CTk):
         )
         self.chk_handle_ico.pack(side="left", padx=15)
 
+        self.v_strict_mode = tk.BooleanVar(value=self.s.strict_mode)
+        self.chk_strict = ctk.CTkCheckBox(
+            options_frame,
+            text="Strict mode (fail on missing deps)",
+            variable=self.v_strict_mode,
+            width=180
+        )
+        self.chk_strict.pack(side="left", padx=15)
+
         self.lbl_found = ctk.CTkLabel(options_frame, text="Found: 0 inputs", font=ctk.CTkFont(slant="italic"))
         self.lbl_found.pack(side="left", padx=15)
+
+        self.recent_var = tk.StringVar(value="Recent paths")
+        self.recent_menu = ctk.CTkOptionMenu(
+            options_frame,
+            variable=self.recent_var,
+            values=["Recent paths", "---"],
+            width=140,
+            command=self._on_recent_select
+        )
+        self.recent_menu.pack(side="left", padx=15)
+
+        self.btn_dep_check = ctk.CTkButton(
+            options_frame,
+            text="Check deps",
+            command=self._check_dependencies,
+            width=90
+        )
+        self.btn_dep_check.pack(side="left", padx=15)
 
         self.theme_option = ctk.CTkOptionMenu(
             options_frame,
@@ -434,7 +470,7 @@ class App(ctk.CTk):
 
         # D) Export Card
         self.v_do_export = tk.BooleanVar(value=self.s.do_export)
-        self.card_d = CardFrame(controls, "D) Export → PNG", enable_var=self.v_do_export, header_fg_color=("#7d8c9b", "#5f6e82"))
+        self.card_d = CardFrame(controls, "D) Export", enable_var=self.v_do_export, header_fg_color=("#7d8c9b", "#5f6e82"))
         self.card_d.grid(row=1, column=1, padx=(6, 0), pady=(6, 0), sticky="nsew")
 
         c_d = self.card_d.content_frame
@@ -447,6 +483,23 @@ class App(ctk.CTk):
         self.v_area = tk.BooleanVar(value=self.s.export_area_drawing)
         self.chk_area = ctk.CTkCheckBox(c_d, text="Area: drawing (crop to graphics boundaries)", variable=self.v_area)
         self.chk_area.grid(row=1, column=0, sticky="w", pady=12)
+
+        self.v_export_fmt = tk.StringVar(value=self.s.export_format)
+        fmt_row = ctk.CTkFrame(c_d, fg_color="transparent")
+        fmt_row.grid(row=2, column=0, sticky="ew", pady=12)
+        fmt_lbl = ctk.CTkLabel(fmt_row, text="Export Format:", font=ctk.CTkFont(size=11))
+        fmt_lbl.pack(side="left", padx=(0, 8))
+        self.opt_export_fmt = ctk.CTkOptionMenu(
+            fmt_row,
+            variable=self.v_export_fmt,
+            values=["png", "svg", "pdf", "eps"],
+            width=100,
+            fg_color=("#9dacbb", "#7d8c9b"),
+            button_color=("#9dacbb", "#7d8c9b"),
+            button_hover_color=("#8ca0b5", "#5c6d80"),
+            text_color="white"
+        )
+        self.opt_export_fmt.pack(side="left")
 
         # --- ACTIONS PANEL ---
         btn = ctk.CTkFrame(self, fg_color="transparent")
@@ -474,6 +527,15 @@ class App(ctk.CTk):
             text_color="white"
         )
         self.btn_defaults.pack(side="left", padx=6)
+
+        self.v_skip_existing = tk.BooleanVar(value=self.s.skip_existing)
+        self.chk_skip = ctk.CTkCheckBox(
+            btn,
+            text="Skip existing",
+            variable=self.v_skip_existing,
+            width=110
+        )
+        self.chk_skip.pack(side="left", padx=6)
 
         self.btn_open_out = ctk.CTkButton(
             btn,
@@ -519,9 +581,40 @@ class App(ctk.CTk):
         )
         self.btn_copy_log.pack(side="right", padx=6)
 
+        self.progress_frame = ctk.CTkFrame(self, fg_color="transparent")
+        self.progress_frame.pack(fill="x", padx=10, pady=(10, 0))
+        self.progress_frame.pack_forget()
+
+        self.progress_bar = ctk.CTkProgressBar(self.progress_frame, mode="determinate", width=300)
+        self.progress_bar.pack(side="left", padx=(0, 10))
+        self.progress_bar.set(0)
+
+        self.lbl_progress = ctk.CTkLabel(self.progress_frame, text="0/0 files", font=ctk.CTkFont(size=11))
+        self.lbl_progress.pack(side="left")
+
+        self.btn_cancel = ctk.CTkButton(
+            self.progress_frame,
+            text="Cancel",
+            command=self.cancel_clicked,
+            width=100,
+            fg_color=("#c62828", "#ef5350"),
+            hover_color=("#b71c1c", "#ff8a80"),
+            text_color="white"
+        )
+        self.btn_cancel.pack(side="right")
+        self.btn_cancel.pack_forget()
+
         # --- LOG TEXTBOX ---
         self.txt = ctk.CTkTextbox(self, wrap="word", state="disabled")
         self.txt.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+        self.txt.bind("<Button-3>", self._on_log_right_click)
+        self.txt.bind("<Double-Button-1>", self._on_log_double_click)
+
+        self._context_menu = tk.Menu(self, tearoff=0)
+        self._context_menu.add_command("Open output file", command=self._open_output_from_log)
+        self._context_menu.add_command("Copy file path", command=self._copy_path_from_log)
+
+        self._current_log_filename = None
 
         self.write(
             "Outputs:\n"
@@ -657,11 +750,59 @@ class App(ctk.CTk):
         except Exception as e:
             messagebox.showerror("Copy Failed", str(e))
 
+    def _on_log_right_click(self, event):
+        self._current_log_filename = None
+        idx = self.txt.index(f"@{event.x},{event.y}")
+        line_start = self.txt.index(f"{idx} linestart")
+        line_end = self.txt.index(f"{idx} lineend")
+        line_text = self.txt.get(line_start, line_end).strip()
+        match = LOG_FILENAME_PATTERN.search(line_text)
+        if match:
+            self._current_log_filename = match.group(1)
+        self._context_menu.tk_popup(event.x_root, event.y_root)
+
+    def _on_log_double_click(self, event):
+        idx = self.txt.index(f"@{event.x},{event.y}")
+        line_start = self.txt.index(f"{idx} linestart")
+        line_end = self.txt.index(f"{idx} lineend")
+        line_text = self.txt.get(line_start, line_end).strip()
+        match = LOG_FILENAME_PATTERN.search(line_text)
+        if match:
+            self._open_output_from_log()
+
+    def _open_output_from_log(self):
+        if not self._current_log_filename:
+            return
+        try:
+            out = Path(self.v_out_path.get().strip()).resolve()
+            out_file = out / self._current_log_filename
+            if out_file.exists():
+                os.startfile(str(out_file))
+            else:
+                messagebox.showinfo("File not found", f"Could not find: {out_file}")
+        except Exception as e:
+            messagebox.showerror("Open failed", str(e))
+
+    def _copy_path_from_log(self):
+        if not self._current_log_filename:
+            return
+        try:
+            out = Path(self.v_out_path.get().strip()).resolve()
+            out_file = out / self._current_log_filename
+            self.clipboard_clear()
+            self.clipboard_append(str(out_file))
+        except Exception as e:
+            messagebox.showerror("Copy failed", str(e))
+
     # ---- helpers ----
     def change_theme(self, choice):
         ctk.set_appearance_mode(choice)
         self.s.theme = choice
         self.s.save()
+        self.card_a.update_widgets_state()
+        self.card_b.update_widgets_state()
+        self.card_c.update_widgets_state()
+        self.card_d.update_widgets_state()
 
     def on_input_path_changed(self, *args):
         p_str = self.v_in_path.get().strip()
@@ -714,6 +855,51 @@ class App(ctk.CTk):
 
         self.s.export_width = int(self.v_w.get())
         self.s.export_area_drawing = bool(self.v_area.get())
+        self.s.export_format = self.v_export_fmt.get().strip().lower()
+        self.s.skip_existing = bool(self.v_skip_existing.get())
+        self.s.strict_mode = bool(self.v_strict_mode.get())
+
+    def _setup_keyboard_shortcuts(self):
+        self.bind("<Control-o>", lambda e: self.browse_input_folder())
+        self.bind("<Control-Return>", lambda e: self.run_all_clicked())
+        self.bind("<Control-s>", lambda e: self.save_settings())
+        self.bind("<Control-q>", lambda e: self.on_close())
+
+    def save_settings(self):
+        self.sync()
+        self.s.save()
+        self.write("\nSettings saved.\n")
+
+    def _check_dependencies(self):
+        deps = [
+            ("vpipe-cli (LineForge Engine)", find_vpipe()),
+        ]
+        for name, path in deps:
+            status = "OK" if path else "NOT FOUND"
+            self.write(f"[Dependency] {name}: {status}\n")
+
+    def _load_recent_inputs(self):
+        recent = self.s.recent_inputs[:10]
+        if recent:
+            self.recent_menu.configure(values=["Recent paths"] + recent + ["---", "Clear history"])
+        else:
+            self.recent_menu.configure(values=["Recent paths", "---"])
+
+    def _on_recent_select(self, choice):
+        if choice == "Clear history":
+            self.s.recent_inputs = []
+            self.recent_menu.set("Recent paths")
+            self._load_recent_inputs()
+        elif choice != "Recent paths" and choice != "---":
+            self.v_in_path.set(choice)
+            self.recent_var.set("Recent paths")
+            self.on_input_path_changed()
+
+    def _update_recent_inputs(self, path: str):
+        if path and path not in self.s.recent_inputs:
+            self.s.recent_inputs.insert(0, path)
+            self.s.recent_inputs = self.s.recent_inputs[:10]
+            self._load_recent_inputs()
 
     def paths(self):
         inp = Path(self.v_in_path.get().strip())
@@ -812,20 +998,62 @@ class App(ctk.CTk):
             messagebox.showerror("Run failed", str(e))
             return
 
+        self._cancel_event.clear()
+        self._total_files = 0
+        self._current_file = 0
+        self.progress_bar.set(0)
+        self.lbl_progress.configure(text="0/0 files")
+        self.progress_frame.pack(fill="x", padx=10, pady=(10, 0))
+        self.btn_cancel.pack(side="right")
+
         self.set_ui_state("disabled")
         self.btn_run.configure(text="Running...", state="disabled")
+
+        def update_progress(current: int, total: int):
+            self._current_file = current
+            self._total_files = total
+            pct = (current / total) if total > 0 else 0
+            self.progress_bar.set(pct)
+            self.lbl_progress.configure(text=f"{current}/{total} files")
 
         def run_thread():
             try:
                 self.write_thread_safe("\nRunning ALL stages...\n")
-                run_all(inp, out, self.s, self.write_thread_safe)
-                self.write_thread_safe("\nDONE.\n")
-                self.after(0, self.open_output_folder)
+                self._result = run_all(inp, out, self.s, self.write_thread_safe, update_progress)
+                if self._cancel_event.is_set():
+                    self.write_thread_safe("\n[Cancelled]\n")
+                else:
+                    self.write_thread_safe("\nDONE.\n")
+                    self._show_stats()
+                    self.after(0, self.open_output_folder)
             except Exception as e:
                 self.write_thread_safe(f"\nFAILED: {e}\n")
                 self.after(0, lambda ex=e: messagebox.showerror("Run failed", str(ex)))
             finally:
+                self._update_recent_inputs(self.v_in_path.get().strip())
                 self.after(0, lambda: self.set_ui_state("normal"))
                 self.after(0, lambda: self.btn_run.configure(text="Run ALL (A→D)", state="normal"))
+                self.after(0, lambda: self.progress_frame.pack_forget())
+                self.after(0, lambda: self.btn_cancel.pack_forget())
 
         threading.Thread(target=run_thread, daemon=True).start()
+
+    def cancel_clicked(self):
+        cancel_pipeline()
+        self.write_thread_safe("\n[Cancel requested...]\n")
+
+    def _show_stats(self):
+        if not self._result:
+            return
+        stats = self._result
+        total_bytes = 0
+        for stage, cnt in stats.stage_stats.items():
+            self.write(f"  {stage}: {cnt} files\n")
+        if stats.failed_files:
+            self.write(f"\nFailed files ({len(stats.failed_files)}):\n")
+            for f in stats.failed_files[:20]:
+                self.write(f"  {f}\n")
+            if len(stats.failed_files) > 20:
+                self.write(f"  ... and {len(stats.failed_files) - 20} more\n")
+        msg = f"\nCompleted: {stats.processed_files} files processed, {len(stats.failed_files)} failed.\n"
+        self.write(msg)

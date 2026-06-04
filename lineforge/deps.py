@@ -10,16 +10,14 @@ def resource_path(rel: str) -> Path:
     return Path(__file__).resolve().parent.parent / rel
 
 
-def find_potrace() -> str | None:
-    bundled = resource_path(r"bin\potrace.exe")
+def find_vpipe() -> str | None:
+    bundled = resource_path("bin/vpipe-cli.exe")
     if bundled.exists():
         return str(bundled)
-    return which("potrace") or which("potrace.exe")
+    return which("vpipe-cli") or which("vpipe-cli.exe")
 
 
-def find_inkscape() -> str | None:
-    return which("inkscape") or which("inkscape.exe")
-
-
-def find_magick() -> str | None:
-    return which("magick")
+def find_all_deps() -> dict:
+    return {
+        "vpipe-cli": find_vpipe(),
+    }

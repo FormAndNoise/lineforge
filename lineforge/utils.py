@@ -16,7 +16,22 @@ def run_cmd(args: List[str]) -> None:
     Run a subprocess command silently (no flashing console windows on Windows).
     Raises RuntimeError if the command fails.
     """
+    run_cmd_out(args)
 
+
+def run_cmd_out(args: List[str]) -> str:
+    """
+    Run a subprocess command silently and return its stdout as a string.
+    Raises RuntimeError if the command fails.
+    """
+    return run_cmd_out_bytes(args).decode("utf-8", errors="replace")
+
+
+def run_cmd_out_bytes(args: List[str]) -> bytes:
+    """
+    Run a subprocess command silently and return its stdout as bytes.
+    Raises RuntimeError if the command fails.
+    """
     creationflags = 0
     startupinfo = None
 
@@ -29,18 +44,20 @@ def run_cmd(args: List[str]) -> None:
         args,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        text=True,
         creationflags=creationflags,
         startupinfo=startupinfo,
     )
 
     if p.returncode != 0:
+        err = p.stderr.decode("utf-8", errors="replace") if p.stderr else p.stdout.decode("utf-8", errors="replace")
         raise RuntimeError(
             "Command failed:\n"
             + " ".join(args)
             + "\n"
-            + (p.stderr or p.stdout)
+            + err
         )
+        
+    return p.stdout
 
 
 def list_images(path: Path, recursive: bool = False) -> list[Path]:

@@ -2,37 +2,23 @@ from __future__ import annotations
 
 import tempfile
 from pathlib import Path
+from PIL import Image, ImageOps
 
-from ..utils import run_cmd
+from ..utils import run_cmd_out_bytes
 
 
 def trace_to_svg(
-    magick: str,
-    potrace: str,
+    vpipe: str,
     src: Path,
     dst: Path,
     cutoff_pct: int = 45,
     invert: bool = False,
     turdsize: int = 8,
     smooth: bool = True,
+    out_fmt: str = "svg",
 ) -> Path:
     """
-    Trace a raster image to SVG using ImageMagick -> PBM then Potrace.
-
-    IMPORTANT:
-    - Many potrace builds do NOT support a '--smooth' flag.
-    - Smoothing/curve fitting is generally the default.
-    - When smooth=False, we use '--flat' (common potrace flag) to reduce curve fitting.
-
-    Args:
-        magick: path to ImageMagick CLI ('magick')
-        potrace: path to potrace executable
-        src: source raster image
-        dst: destination SVG path
-        cutoff_pct: threshold cutoff percent (0..100)
-        invert: invert colors before threshold
-        turdsize: speck removal (potrace --turdsize)
-        smooth: if False, pass '--flat' to reduce smoothing (no curves)
+    Trace a raster image to SVG using vpipe-cli.
     """
     src = Path(src)
     dst = Path(dst)
@@ -42,38 +28,41 @@ def trace_to_svg(
 
     dst.parent.mkdir(parents=True, exist_ok=True)
 
-    cutoff = max(0, min(100, int(cutoff_pct)))
-
     with tempfile.TemporaryDirectory() as td:
         td_path = Path(td)
-        pbm = td_path / (src.stem + ".pbm")
+        rgba_file = td_path / (src.stem + ".rgba")
 
-        # 1) Make a clean 1-bit PBM for potrace
-        args = [magick, str(src)]
-        args += ["-background", "white", "-alpha", "remove", "-alpha", "off"]
-        args += ["-colorspace", "Gray"]
+        # 1) Prepare the image for the Rust engine (apply invert/threshold here if needed)
+        # Note: vpipe-cli applies its own 0.5 threshold internally.
+        img = Image.open(src).convert("L")
         if invert:
-            args += ["-negate"]
-        args += ["-threshold", f"{cutoff}%"]
-        args += [f"pbm:{pbm}"]
+            img = ImageOps.invert(img)
+            
+        threshold_val = int(255 * cutoff_pct / 100)
+        img = img.point(lambda p: 255 if p > threshold_val else 0)
+        
+        img_rgba = img.convert("RGBA")
+        with open(rgba_file, "wb") as f:
+            f.write(img_rgba.tobytes())
 
-        run_cmd(args)
-
-        # 2) Potrace -> SVG
-        pargs = [
-            potrace,
-            str(pbm),
-            "-s",
-            "-o",
-            str(dst),
+        # 2) vpipe-cli -> SVG (stdout)
+        args = [
+            vpipe,
+            str(rgba_file),
+            str(img.width),
+            str(img.height),
             "--turdsize",
             str(int(turdsize)),
+            "--format",
+            "svg",
         ]
 
-        # No '--smooth' (not standard). If user wants "less smoothing", use '--flat'.
         if not smooth:
-            pargs.append("--flat")
+            args.append("--flat")
 
-        run_cmd(pargs)
+        output_bytes = run_cmd_out_bytes(args)
+        
+        with open(dst, "wb") as f:
+            f.write(output_bytes)
 
     return dst

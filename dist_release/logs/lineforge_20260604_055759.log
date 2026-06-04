@@ -1,0 +1,5 @@
+--- Log: C:\Users\aguy\lineforge\dist_release\logs\lineforge_20260604_055759.log ---
+
+Running ALL stages...
+
+FAILED: ImageMagick 'magick' not found on PATH.
