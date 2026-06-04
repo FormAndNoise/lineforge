@@ -2,14 +2,12 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import List
+from PIL import Image
 
-from ..utils import run_cmd
 
-
-def split_ico_to_pngs(magick: str, ico_path: Path, out_dir: Path) -> List[Path]:
+def split_ico_to_pngs(ico_path: Path, out_dir: Path) -> List[Path]:
     """
-    Extract all embedded icon frames from .ico into PNG files using ImageMagick.
-
+    Extract all embedded icon frames from .ico into PNG files using Pillow.
     Produces: out_dir/<stem>_frame_000.png, etc.
     """
     ico_path = Path(ico_path)
@@ -19,27 +17,30 @@ def split_ico_to_pngs(magick: str, ico_path: Path, out_dir: Path) -> List[Path]:
     if not ico_path.exists():
         raise FileNotFoundError(f"ICO not found: {ico_path}")
 
-    # ImageMagick writes one file per frame using a numbered pattern.
-    pattern = out_dir / f"{ico_path.stem}_frame_%03d.png"
+    img = Image.open(ico_path)
+    frames = []
+    
+    try:
+        idx = 0
+        while True:
+            img.seek(idx)
+            frame_path = out_dir / f"{ico_path.stem}_frame_{idx:03d}.png"
+            # Ensure RGBA for saving
+            frame_img = img.copy()
+            if frame_img.mode != "RGBA":
+                frame_img = frame_img.convert("RGBA")
+            frame_img.save(frame_path, "PNG")
+            frames.append(frame_path)
+            idx += 1
+    except EOFError:
+        pass
 
-    args = [
-        magick,
-        str(ico_path),
-        "-alpha", "on",
-        "-strip",
-        str(pattern),
-    ]
-    run_cmd(args)
-
-    frames = sorted(out_dir.glob(f"{ico_path.stem}_frame_*.png"))
     return frames
 
 
-def rebuild_ico_from_pngs(magick: str, png_frames: List[Path], dst_ico: Path) -> Path:
+def rebuild_ico_from_pngs(png_frames: List[Path], dst_ico: Path) -> Path:
     """
-    Rebuild an .ico from multiple PNG frames using ImageMagick.
-
-    NOTE: Best results when frames are square and common icon sizes (16, 24, 32, 48, 64, 128, 256).
+    Rebuild an .ico from multiple PNG frames using Pillow.
     """
     dst_ico = Path(dst_ico)
     dst_ico.parent.mkdir(parents=True, exist_ok=True)
@@ -47,6 +48,14 @@ def rebuild_ico_from_pngs(magick: str, png_frames: List[Path], dst_ico: Path) ->
     if not png_frames:
         raise RuntimeError("No PNG frames supplied to rebuild ICO.")
 
-    args = [magick] + [str(p) for p in png_frames] + ["-colors", "256", str(dst_ico)]
-    run_cmd(args)
+    images = []
+    for p in png_frames:
+        img = Image.open(p)
+        if img.mode != "RGBA":
+            img = img.convert("RGBA")
+        images.append(img)
+
+    if images:
+        images[0].save(dst_ico, format="ICO", append_images=images[1:])
+        
     return dst_ico

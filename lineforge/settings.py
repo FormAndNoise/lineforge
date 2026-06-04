@@ -58,6 +58,47 @@ class Settings:
     # UI Theme
     theme: str = "System"  # "System" | "Dark" | "Light"
 
+    # New features
+    skip_existing: bool = False
+    output_dir_preprocess: str = "01_preprocessed"
+    output_dir_pad: str = "02_padded"
+    output_dir_svg: str = "03_svg"
+    output_dir_export: str = "04_export_png"
+    export_format: str = "png"
+    recent_inputs: list = None  # type: ignore
+    strict_mode: bool = False  # If True, fail on missing deps; if False, warn and skip stages
+
+    def __post_init__(self):
+        if self.recent_inputs is None:
+            self.recent_inputs = []
+
+    def save_preset(self, name: str) -> None:
+        from dataclasses import asdict
+        preset_path = Path("presets") / f"{name}.json"
+        preset_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(preset_path, "w", encoding="utf-8") as f:
+            json.dump(asdict(self), f, indent=4)
+
+    def load_preset(self, name: str) -> "Settings":
+        preset_path = Path("presets") / f"{name}.json"
+        if preset_path.exists():
+            with open(preset_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            import dataclasses
+            fields = {f.name for f in dataclasses.fields(self)}
+            filtered = {k: v for k, v in data.items() if k in fields}
+            new_s = Settings(**filtered)
+            new_s.recent_inputs = self.recent_inputs
+            return new_s
+        return self
+
+    @classmethod
+    def list_presets(cls) -> list:
+        presets_dir = Path("presets")
+        if presets_dir.exists():
+            return sorted([p.stem for p in presets_dir.glob("*.json")])
+        return []
+
     def save(self, path: Path | str = "settings.json") -> None:
         from dataclasses import asdict
         try:
