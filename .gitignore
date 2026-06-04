@@ -5,3 +5,12 @@ Logo option 2.svg
 *.log
 # Ignore compiled binary on development branches
 /bin/vpipe-cli.exe
+
+# Build directories
+build_release/
+dist_release/
+__pycache__/
+*.pyc
+logs/
+settings.json
+lineforge_engine/target/
