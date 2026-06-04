@@ -167,8 +167,8 @@ class App(ctk.CTk):
         super().__init__()
 
         self.title("LineForge")
-        self.geometry("1040x860")
-        self.minsize(980, 760)
+        self.geometry("1024x700")
+        self.minsize(900, 600)
 
         self.s = Settings.load()
         ctk.set_appearance_mode(self.s.theme)
@@ -323,7 +323,7 @@ class App(ctk.CTk):
         theme_lbl.pack(side="right")
 
         # --- CONTROLS GRID (2x2 Uniform) ---
-        controls = ctk.CTkFrame(self, fg_color="transparent")
+        controls = ctk.CTkScrollableFrame(self, fg_color="transparent")
         controls.pack(fill="both", expand=True, padx=10, pady=(0, 10))
 
         controls.grid_columnconfigure(0, weight=1, uniform="equal")
@@ -611,8 +611,8 @@ class App(ctk.CTk):
         self.txt.bind("<Double-Button-1>", self._on_log_double_click)
 
         self._context_menu = tk.Menu(self, tearoff=0)
-        self._context_menu.add_command("Open output file", command=self._open_output_from_log)
-        self._context_menu.add_command("Copy file path", command=self._copy_path_from_log)
+        self._context_menu.add_command(label="Open output file", command=self._open_output_from_log)
+        self._context_menu.add_command(label="Copy file path", command=self._copy_path_from_log)
 
         self._current_log_filename = None
 
