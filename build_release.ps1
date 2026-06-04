@@ -13,7 +13,7 @@ function Remove-IfExists([string]$p) {
 
 # ---- CONFIG ----
 $AppName = "LineForge"
-$Entry   = ".\main.py"
+$Entry = ".\main.py"
 
 # If $true: require NOTICE.txt + Licenses folder to exist or fail the build.
 # If $false: bundle them only if present.
@@ -37,7 +37,7 @@ $Root = $PSScriptRoot
 
 # Potrace support removed – no longer required for build
 # $PotracePath = Join-Path $Root "bin\potrace.exe"
-$NoticePath  = Join-Path $Root "NOTICE.txt"
+$NoticePath = Join-Path $Root "NOTICE.txt"
 $LicensesDir = Join-Path $Root $LicensesFolderName
 
 # if (-not (Test-Path $PotracePath)) { Fail "Missing required file: $PotracePath" }
@@ -46,20 +46,20 @@ $LicensesDir = Join-Path $Root $LicensesFolderName
 #   if (-not (Test-Path $NoticePath))  { Fail "Missing required file: $NoticePath" }
 #   if (-not (Test-Path $LicensesDir)) { Fail "Missing required folder: $LicensesDir" }
 # } else {
-  if (-not (Test-Path $NoticePath))  { Write-Host "NOTE: NOTICE.txt not found (will not bundle)." -ForegroundColor Yellow }
-  if (-not (Test-Path $LicensesDir)) { Write-Host "NOTE: $LicensesFolderName folder not found (will not bundle)." -ForegroundColor Yellow }
+if (-not (Test-Path $NoticePath)) { Write-Host "NOTE: NOTICE.txt not found (will not bundle)." -ForegroundColor Yellow }
+if (-not (Test-Path $LicensesDir)) { Write-Host "NOTE: $LicensesFolderName folder not found (will not bundle)." -ForegroundColor Yellow }
 # }
 
 # Potrace path resolution removed
 # $PotraceAbs = (Resolve-Path $PotracePath).Path
-$NoticeAbs  = $null
+$NoticeAbs = $null
 $LicensesAbs = $null
-if (Test-Path $NoticePath)  { $NoticeAbs = (Resolve-Path $NoticePath).Path }
+if (Test-Path $NoticePath) { $NoticeAbs = (Resolve-Path $NoticePath).Path }
 if (Test-Path $LicensesDir) { $LicensesAbs = (Resolve-Path $LicensesDir).Path }
 
 Write-Host "Entrypoint: $Entry"
 # Write-Host "Bundling:  $PotraceAbs"  # Potrace not bundled
-if ($NoticeAbs)   { Write-Host "Bundling:  $NoticeAbs" }
+if ($NoticeAbs) { Write-Host "Bundling:  $NoticeAbs" }
 if ($LicensesAbs) { Write-Host "Bundling:  $LicensesAbs" }
 Write-Host ""
 
@@ -82,16 +82,16 @@ Write-Host "CustomTkinter found at: $CtkPath"
 # - --onefile: single exe (what your README claims for release)
 # - --noconsole/--windowed: GUI app, no console window
 $Args = @(
-  "-m","PyInstaller",
+  "-m", "PyInstaller",
   "--noconfirm",
   "--clean",
   "--onefile",
   "--noconsole",
-  "--name",$AppName,
-  "--distpath",$DistDir,
-  "--workpath",$BuildDir,
-  "--specpath",$BuildDir,
-  "--log-level","WARN"
+  "--name", $AppName,
+  "--distpath", $DistDir,
+  "--workpath", $BuildDir,
+  "--specpath", $BuildDir,
+  "--log-level", "WARN"
 )
 
 # If you add an icon later, uncomment these lines:
@@ -100,14 +100,20 @@ $Args = @(
 #   $Args += @("--icon", $IconAbs)
 # }
 
-# Potrace bundling removed – no longer needed
-# $Args += @("--add-binary", "$PotraceAbs;bin")
+# Bundle Rust Engine (vpipe-cli.exe) if present
+$VpipePath = Join-Path $Root "bin\vpipe-cli.exe"
+if (Test-Path $VpipePath) {
+  $VpipeAbs = (Resolve-Path $VpipePath).Path
+  $Args += @("--add-binary", "$VpipeAbs;bin")
+} else {
+  Write-Host "NOTE: bin\vpipe-cli.exe not found. The resulting executable won't contain the rust engine!" -ForegroundColor Yellow
+}
 
 # Bundle customtkinter assets
 $Args += @("--add-data", "$CtkPath;customtkinter")
 
 # Bundle NOTICE + Licenses if present
-if ($NoticeAbs)   { $Args += @("--add-data", "$NoticeAbs;.") }
+if ($NoticeAbs) { $Args += @("--add-data", "$NoticeAbs;.") }
 if ($LicensesAbs) { $Args += @("--add-data", "$LicensesAbs;$LicensesFolderName") }
 
 # Entrypoint
