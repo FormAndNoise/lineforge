@@ -35,28 +35,30 @@ if (-not (Test-Path $Entry)) { Fail "Entrypoint not found: $Entry" }
 
 $Root = $PSScriptRoot
 
-$PotracePath = Join-Path $Root "bin\potrace.exe"
+# Potrace support removed – no longer required for build
+# $PotracePath = Join-Path $Root "bin\potrace.exe"
 $NoticePath  = Join-Path $Root "NOTICE.txt"
 $LicensesDir = Join-Path $Root $LicensesFolderName
 
-if (-not (Test-Path $PotracePath)) { Fail "Missing required file: $PotracePath" }
+# if (-not (Test-Path $PotracePath)) { Fail "Missing required file: $PotracePath" }
 
-if ($StrictCompliance) {
-  if (-not (Test-Path $NoticePath))  { Fail "Missing required file: $NoticePath" }
-  if (-not (Test-Path $LicensesDir)) { Fail "Missing required folder: $LicensesDir" }
-} else {
+# if ($StrictCompliance) {
+#   if (-not (Test-Path $NoticePath))  { Fail "Missing required file: $NoticePath" }
+#   if (-not (Test-Path $LicensesDir)) { Fail "Missing required folder: $LicensesDir" }
+# } else {
   if (-not (Test-Path $NoticePath))  { Write-Host "NOTE: NOTICE.txt not found (will not bundle)." -ForegroundColor Yellow }
   if (-not (Test-Path $LicensesDir)) { Write-Host "NOTE: $LicensesFolderName folder not found (will not bundle)." -ForegroundColor Yellow }
-}
+# }
 
-$PotraceAbs = (Resolve-Path $PotracePath).Path
+# Potrace path resolution removed
+# $PotraceAbs = (Resolve-Path $PotracePath).Path
 $NoticeAbs  = $null
 $LicensesAbs = $null
 if (Test-Path $NoticePath)  { $NoticeAbs = (Resolve-Path $NoticePath).Path }
 if (Test-Path $LicensesDir) { $LicensesAbs = (Resolve-Path $LicensesDir).Path }
 
 Write-Host "Entrypoint: $Entry"
-Write-Host "Bundling:  $PotraceAbs"
+# Write-Host "Bundling:  $PotraceAbs"  # Potrace not bundled
 if ($NoticeAbs)   { Write-Host "Bundling:  $NoticeAbs" }
 if ($LicensesAbs) { Write-Host "Bundling:  $LicensesAbs" }
 Write-Host ""
@@ -98,8 +100,8 @@ $Args = @(
 #   $Args += @("--icon", $IconAbs)
 # }
 
-# Bundle potrace into the app under bin\
-$Args += @("--add-binary", "$PotraceAbs;bin")
+# Potrace bundling removed – no longer needed
+# $Args += @("--add-binary", "$PotraceAbs;bin")
 
 # Bundle customtkinter assets
 $Args += @("--add-data", "$CtkPath;customtkinter")

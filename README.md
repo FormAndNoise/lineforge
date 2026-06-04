@@ -1,33 +1,27 @@
 # LineForge
 
-LineForge is currently Windows only. A Linux build is on the way.
+LineForge is a Windows‑only batch image processing pipeline that now uses a **native Rust engine** (`vpipe-cli`) for all heavy‑lifting. No external binaries such as ImageMagick, Potrace, or Inkscape are required.
 
-To build lineforge    
+## Building the project
 
-```
+```powershell
 git clone https://github.com/aarik/lineforge.git
 cd lineforge
+# The Rust engine is built automatically as part of the Python install step,
+# or you can build it manually:
+#   cargo build --release
 ```
 
-Then run
-
-```
-powershell -ExecutionPolicy Bypass -File .\build_release.ps1
-```
-
-The .EXE will output at dist_release/LineForge.exe
-
+The compiled executable appears as `bin\vpipe-cli.exe` and is discovered automatically by the UI.
 
 ---
-LineForge is a modular batch image processing pipeline for preparing raster artwork for tracing, icon refinement, and dataset cleanup.
 
-It provides:
+LineForge is a modular batch image processing pipeline for preparing raster artwork for vectorisation, icon refinement, and dataset clean‑up. It provides:
 
-- Image preprocessing (ImageMagick)
-- Square padding / resizing
-- Raster → SVG tracing (Potrace)
-- SVG → PNG export (Inkscape)
-- ICO round-trip support (extract → process → rebuild)
+- **Image preprocessing** – performed with Python Pillow (no external tools).
+- **Square padding / resizing**.
+- **Raster → Vector tracing** – performed by the Rust `vpipe-cli` engine, outputting SVG, PDF, or EPS.
+- **ICO round‑trip support** – extract, process, and rebuild ICOs using Pillow only.
 
 ---
 
@@ -47,9 +41,9 @@ Input sources:
 - Folder (recursive)
 
 The UI displays:
-
-`Found: X inputs`
-
+```
+Found: X inputs
+```
 If zero files are found, enable recursive mode when selecting a parent folder.
 
 ---
@@ -59,18 +53,16 @@ If zero files are found, enable recursive mode when selecting a parent folder.
 Each stage can be enabled or disabled independently.
 
 ### A) Preprocess
-Uses ImageMagick.
-
-Options:
+Uses **Pillow** for:
 - Grayscale
-- Auto-level
+- Auto‑level
 - Contrast stretch
 - Median filter
 - Blur
 - Negate
 - Threshold (slider)
 
-Outputs to output/01_preprocessed
+Outputs to `output/01_preprocessed`
 
 ---
 
@@ -80,51 +72,35 @@ Outputs to output/01_preprocessed
 - Output format: PNG or JPG
 - JPEG quality control
 
-Outputs to output/02_padded
+Outputs to `output/02_padded`
 
 ---
 
-### C) Trace → SVG
-Uses Potrace.
-
+### C) Trace → Vector
+Uses the **Rust engine (`vpipe-cli`)** to produce vector formats directly.
 Options:
 - Threshold cutoff
 - Invert before threshold
 - Turdsize
-- Smooth toggle  
-  (Smoothing is default; disabling applies `--flat`.)
+- Smooth toggle (default smooth, `--flat` disables)
+- Output format: `svg`, `pdf`, or `eps`
 
-Outputs to output/03_svg
+Outputs to `output/03_vector`
 
 ---
 
-### D) Export → PNG
-Uses Inkscape.
-
-Options:
-- Export width
-- Area: drawing
-
-Outputs to output/04_export_png
+### D) Export → Raster (optional)
+If you need a raster export of the vector output, the Rust engine can also render PNGs directly. Select the desired export format in the UI.
 
 ---
 
 ## ICO Processing (Optional)
-
 When enabled:
-
 1. `.ico` files are extracted into PNG frames.
-2. Frames are processed through selected stages.
+2. Frames are processed through the selected stages.
 3. Processed frames are rebuilt into a new `.ico`.
 
-Final icons land in output/05_ico and temporary extracted frames can be found in output/_ico_frames
-
-Recommended icon workflow:
-- Enable ICO handling
-- Enable Preprocess + Pad
-- Disable Trace (unless vectorizing)
-- Use PNG output
-- Export width 256
+Final icons land in `output/05_ico` and temporary extracted frames can be found in `output/_ico_frames`.
 
 ---
 
@@ -134,28 +110,19 @@ Recommended icon workflow:
 output/
 ├── 01_preprocessed/
 ├── 02_padded/
-├── 03_svg/
-├── 04_export_png/
-├── 05_ico/        (if enabled)
-└── _ico_frames/   (temporary)
+├── 03_vector/          (SVG/PDF/EPS)
+├── 04_export_png/      (optional PNG export)
+├── 05_ico/            (if enabled)
+└── _ico_frames/       (temporary)
 ```
 
 ---
 
 ## Dependencies
 
-Must be available on PATH:
-
-- ImageMagick (`magick`)
-- Potrace
-- Inkscape
-
-`potrace.exe` is bundled in release builds.
-ImageMagick and Inkscape must be installed separately.
+The only external requirement is the **Rust engine** bundled as `vpipe-cli.exe` (automatically built or provided in releases). All other processing is performed with the standard Python library and Pillow.
 
 ---
-
-
 
 ## Logs
 
@@ -165,7 +132,7 @@ Each run creates a timestamped log file in:
 logs/
 ```
 
-The UI provides:
+The UI provides shortcuts to:
 - Open output folder
 - Open last log
 - Clear log
