@@ -2,17 +2,55 @@
 
 LineForge is a Windows‑only batch image processing pipeline that now uses a **native Rust engine** (`vpipe-cli`) for all heavy‑lifting. No external binaries such as ImageMagick, Potrace, or Inkscape are required.
 
-## Building the project
+## Building and Running the Project
+
+### Prerequisites
+1. **Python 3.10+** (ensure `python` or `py` is in your PATH).
+2. **Rust & Cargo** (required to compile the native Rust engine).
+
+---
+
+### Option A: Build and Package a Release Executable
+To compile the Rust engine and bundle the entire application (Python script, UI assets, and the Rust engine) into a single, self-contained Windows executable, run the provided PowerShell build script:
 
 ```powershell
-git clone https://github.com/aarik/lineforge.git
-cd lineforge
-# The Rust engine is built automatically as part of the Python install step,
-# or you can build it manually:
-#   cargo build --release
+# Run the release build script
+.\build_release.ps1
 ```
 
-The compiled executable appears as `bin\vpipe-cli.exe` and is discovered automatically by the UI.
+**What the script does:**
+1. Automatically compiles the Rust engine (`lineforge_engine`) in release mode using Cargo.
+2. Places the compiled binary under `bin\vpipe-cli.exe`.
+3. Upgrades pip and installs the necessary Python dependencies (`requirements.txt`) and PyInstaller.
+4. Packages everything into a single-file executable using PyInstaller.
+5. Outputs the final executable at `dist_release\LineForge.exe`.
+
+---
+
+### Option B: Running from Source (Development)
+If you want to run the project directly from source:
+
+1. **Build the Rust engine:**
+   ```powershell
+   cd lineforge_engine
+   cargo build --release
+   cd ..
+   ```
+2. **Copy the binary** into the expected search path:
+   ```powershell
+   # Create the bin folder if it doesn't exist
+   if (!(Test-Path bin)) { New-Item -ItemType Directory -Path bin }
+   # Copy the compiled executable and rename it to vpipe-cli.exe
+   Copy-Item lineforge_engine\target\release\vpipe-cli.exe bin\vpipe-cli.exe
+   ```
+3. **Install Python dependencies:**
+   ```powershell
+   pip install -r requirements.txt
+   ```
+4. **Run the application:**
+   ```powershell
+   python main.py
+   ```
 
 ---
 

@@ -68,10 +68,34 @@ Remove-IfExists $BuildDir
 Remove-IfExists $DistDir
 Remove-IfExists ".\$AppName.spec"
 
+# Build Rust Engine if cargo is available
+$RustEngineDir = Join-Path $PSScriptRoot "lineforge_engine"
+$BinDir = Join-Path $PSScriptRoot "bin"
+$VpipeTarget = Join-Path $BinDir "vpipe-cli.exe"
+
+Write-Host "`nChecking Rust Engine..." -ForegroundColor Cyan
+if (Get-Command cargo -ErrorAction SilentlyContinue) {
+  Write-Host "Building Rust engine with Cargo..." -ForegroundColor Cyan
+  Push-Location $RustEngineDir
+  try {
+    cargo build --release | Out-Host
+    if (-not (Test-Path $BinDir)) { New-Item -ItemType Directory -Path $BinDir | Out-Null }
+    Copy-Item "target\release\vpipe-cli.exe" $VpipeTarget -Force
+    Write-Host "Rust Engine successfully built and copied to $VpipeTarget" -ForegroundColor Green
+  } catch {
+    Write-Host "Warning: Failed to build Rust Engine: $_" -ForegroundColor Yellow
+  } finally {
+    Pop-Location
+  }
+} else {
+  Write-Host "Warning: cargo command not found. Skipping Rust engine build. If bin\vpipe-cli.exe is not present, tracing features will fail." -ForegroundColor Yellow
+}
+
 Write-Host "`nUpgrading pip + installing build deps..." -ForegroundColor Cyan
 py -m pip install --upgrade pip | Out-Host
 py -m pip install --upgrade pyinstaller | Out-Host
 if (Test-Path ".\requirements.txt") { py -m pip install -r requirements.txt | Out-Host }
+py -m pip uninstall -y pathlib | Out-Host
 
 # Dynamically locate customtkinter path to bundle it
 Write-Host "`nLocating customtkinter installation path..." -ForegroundColor Cyan

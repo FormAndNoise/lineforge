@@ -3,4 +3,9 @@ name = "lineforge_engine"
 version = "0.1.0"
 edition = "2021"
 
+[[bin]]
+name = "vpipe-cli"
+path = "src/main.rs"
+
 [dependencies]
+
