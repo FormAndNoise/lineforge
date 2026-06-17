@@ -25,7 +25,7 @@ $DistDir = ".\dist_release"
 $BuildDir = ".\build_release"
 
 # Extra PyInstaller flags (optional)
-# $IconPath = ".\assets\lineforge.ico"   # uncomment + set if you add an icon
+$IconPath = ".\lineforge_icon.ico"
 # -----------------
 
 Write-Host "`n== LineForge RELEASE build ==" -ForegroundColor Cyan
@@ -118,11 +118,19 @@ $Args = @(
   "--log-level", "WARN"
 )
 
-# If you add an icon later, uncomment these lines:
-# if (Test-Path $IconPath) {
-#   $IconAbs = (Resolve-Path $IconPath).Path
-#   $Args += @("--icon", $IconAbs)
-# }
+# Adding the icon to the executable
+if (Test-Path $IconPath) {
+  $IconAbs = (Resolve-Path $IconPath).Path
+  $Args += @("--icon", $IconAbs)
+  $Args += @("--add-data", "$IconAbs;.")
+}
+
+# Bundle the PNG logo
+$PngPath = ".\lineforge icon.png"
+if (Test-Path $PngPath) {
+  $PngAbs = (Resolve-Path $PngPath).Path
+  $Args += @("--add-data", "$PngAbs;.")
+}
 
 # Bundle Rust Engine (vpipe-cli.exe) if present
 $VpipePath = Join-Path $Root "bin\vpipe-cli.exe"

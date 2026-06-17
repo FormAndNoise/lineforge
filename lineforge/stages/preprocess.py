@@ -44,7 +44,7 @@ def preprocess_pil(
     
     if mode == "threshold":
         threshold = int(255 * threshold_pct / 100)
-        img = img.convert("1", dither=Image.NONE, threshold=threshold)
+        img = img.convert("L").point(lambda p: 255 if p > threshold else 0).convert("1")
     elif mode == "quantize":
         levels = max(2, min(256, int(quantize_levels)))
         img = img.convert("L")

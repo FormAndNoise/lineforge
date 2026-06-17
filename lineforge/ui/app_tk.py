@@ -6,12 +6,13 @@ from pathlib import Path
 from datetime import datetime
 import customtkinter as ctk
 import threading
+from PIL import Image
 
 from ..settings import Settings
 from ..utils import list_images
 from ..pipeline import run_all, cancel_pipeline, PipelineResult
 from .theme import get_theme_path
-from ..deps import find_vpipe
+from ..deps import find_vpipe, resource_path
 
 LOG_FILENAME_PATTERN = re.compile(r'\[\d+/\d+\]\s*(.+\.(png|jpg|jpeg|svg|pdf|eps))')
 
@@ -170,6 +171,13 @@ class App(ctk.CTk):
         self.geometry("1024x700")
         self.minsize(900, 600)
 
+        try:
+            icon_path = resource_path("lineforge_icon.ico")
+            if os.path.exists(icon_path):
+                self.iconbitmap(icon_path)
+        except Exception:
+            pass
+
         self.s = Settings.load()
         ctk.set_appearance_mode(self.s.theme)
         ctk.set_default_color_theme(get_theme_path())
@@ -197,6 +205,24 @@ class App(ctk.CTk):
         self._setup_keyboard_shortcuts()
 
     def _build_ui(self):
+        # --- HEADER (Logo + Title) ---
+        header_frame = ctk.CTkFrame(self, fg_color="transparent")
+        header_frame.pack(fill="x", padx=10, pady=(10, 0))
+
+        try:
+            logo_path = resource_path("lineforge icon.png")
+            if os.path.exists(logo_path):
+                logo_img = ctk.CTkImage(light_image=Image.open(logo_path),
+                                        dark_image=Image.open(logo_path),
+                                        size=(48, 48))
+                lbl_logo = ctk.CTkLabel(header_frame, image=logo_img, text="")
+                lbl_logo.pack(side="left", padx=(0, 10))
+        except Exception:
+            pass
+            
+        lbl_app_title = ctk.CTkLabel(header_frame, text="LineForge", font=ctk.CTkFont(size=24, weight="bold"))
+        lbl_app_title.pack(side="left")
+
         # --- TOP FRAME (Paths & General) ---
         top = ctk.CTkFrame(self, corner_radius=12, border_width=1, border_color="#9b9b9b")
         top.pack(fill="x", padx=10, pady=10)
