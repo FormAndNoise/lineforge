@@ -4,7 +4,7 @@ import tempfile
 from pathlib import Path
 from PIL import Image, ImageOps
 
-from ..utils import run_cmd_out_bytes
+from ..utils import run_cmd
 
 
 def trace_to_svg(
@@ -30,7 +30,7 @@ def trace_to_svg(
 
     with tempfile.TemporaryDirectory() as td:
         td_path = Path(td)
-        rgba_file = td_path / (src.stem + ".rgba")
+        raw_file = td_path / (src.stem + ".gray")
 
         # 1) Prepare the image for the Rust engine (apply invert/threshold here if needed)
         # Note: vpipe-cli applies its own 0.5 threshold internally.
@@ -41,28 +41,26 @@ def trace_to_svg(
         threshold_val = int(255 * cutoff_pct / 100)
         img = img.point(lambda p: 255 if p > threshold_val else 0)
         
-        img_rgba = img.convert("RGBA")
-        with open(rgba_file, "wb") as f:
-            f.write(img_rgba.tobytes())
+        with open(raw_file, "wb") as f:
+            f.write(img.tobytes())
 
-        # 2) vpipe-cli -> SVG (stdout)
+        # 2) vpipe-cli -> file export
         args = [
             vpipe,
-            str(rgba_file),
+            str(raw_file),
             str(img.width),
             str(img.height),
             "--turdsize",
             str(int(turdsize)),
             "--format",
-            "svg",
+            out_fmt,
+            "--out",
+            str(dst)
         ]
 
         if not smooth:
             args.append("--flat")
 
-        output_bytes = run_cmd_out_bytes(args)
-        
-        with open(dst, "wb") as f:
-            f.write(output_bytes)
+        run_cmd(args)
 
     return dst

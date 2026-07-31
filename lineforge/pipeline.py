@@ -103,7 +103,7 @@ def run_all(
             progress_callback(current, total)
 
     if s.do_preprocess:
-        d1 = output_root / _get_output_dir(output_root, "preprocess", s)
+        d1 = _get_output_dir(output_root, "preprocess", s)
         d1.mkdir(parents=True, exist_ok=True)
 
         log(f"\n[A] Preprocess -> {d1}\n")
@@ -135,7 +135,7 @@ def run_all(
         files = list_images(d1, recursive=False)
 
     if s.do_pad:
-        d2 = output_root / _get_output_dir(output_root, "pad", s)
+        d2 = _get_output_dir(output_root, "pad", s)
         d2.mkdir(parents=True, exist_ok=True)
         log(f"\n[B] Pad -> {d2}\n")
         count = 0
@@ -167,7 +167,7 @@ def run_all(
             log("  WARN: vpipe-cli not found - skipping Trace stage\n")
             s.do_trace = False
         else:
-            d3 = output_root / _get_output_dir(output_root, "trace", s)
+            d3 = _get_output_dir(output_root, "trace", s)
             d3.mkdir(parents=True, exist_ok=True)
             log(f"\n[C] Trace -> {d3}\n")
             count = 0
@@ -182,13 +182,11 @@ def run_all(
                     continue
                 try:
                     log(f"  [{i}/{len(files)}] {src.name}\n")
-                    out_fmt = s.export_format if s.do_export and s.export_format in ("svg", "pdf", "eps") else "svg"
-                    dst = d3 / (src.stem + f".{out_fmt}")
                     trace_to_svg(
                         vpipe, src, dst,
                         s.trace_cutoff_pct, s.trace_invert,
                         s.potrace_turdsize, s.potrace_smooth,
-                        out_fmt
+                        "svg"
                     )
                     count += 1
                 except Exception as e:
@@ -198,10 +196,68 @@ def run_all(
             result.stage_stats["trace"] = count
             files = sorted(d3.glob("*.svg"))
 
-    if s.do_export and not s.do_trace:
-        log("  WARN: LineForge Engine directly exports from raster.\n")
-        log("  Please enable 'Vectorize (Trace)' to generate PDF/EPS.\n")
-        log("  Standalone SVG export is no longer supported without Inkscape.\n")
+    if s.do_export:
+        d4 = _get_output_dir(output_root, "export", s)
+        d4.mkdir(parents=True, exist_ok=True)
+        log(f"\n[D] Export -> {d4}\n")
+
+        if s.export_format in ("pdf", "eps"):
+            vpipe = find_vpipe()
+            if not vpipe:
+                log("  ERROR: vpipe-cli not found for native PDF/EPS export.\n")
+            else:
+                count = 0
+                raster_dir = _choose_last_raster_dir(output_root, s)
+                raster_files = list_images(raster_dir, recursive=False)
+                for i, src in enumerate(raster_files, 1):
+                    if _cancel_event.is_set():
+                        log("  CANCELLED\n")
+                        return result
+                    dst = d4 / (src.stem + f".{s.export_format}")
+                    if s.skip_existing and dst.exists():
+                        log(f"  [{i}/{len(raster_files)}] {src.name} (skipped, exists)\n")
+                        continue
+                    try:
+                        log(f"  [{i}/{len(raster_files)}] {src.name} (native rust export)\n")
+                        trace_to_svg(
+                            vpipe, src, dst,
+                            s.trace_cutoff_pct, s.trace_invert,
+                            s.potrace_turdsize, s.potrace_smooth,
+                            s.export_format
+                        )
+                        count += 1
+                    except Exception as e:
+                        log(f"  ERROR: {src.name}: {e}\n")
+                        result.failed_files.append(src.name)
+                result.stage_stats["export"] = count
+                
+        elif s.export_format in ("png", "svg"):
+            from .utils import which
+            inkscape = which("inkscape") or which("inkscape.exe")
+            if not inkscape:
+                log("  ERROR: Inkscape is required for PNG/SVG export but was not found.\n")
+            else:
+                if not s.do_trace:
+                    log("  ERROR: Please enable 'Vectorize (Trace)' to export PNG from vectors.\n")
+                else:
+                    count = 0
+                    for i, src in enumerate(files, 1):
+                        if _cancel_event.is_set():
+                            log("  CANCELLED\n")
+                            return result
+                        dst = d4 / (src.stem + f".{s.export_format}")
+                        if s.skip_existing and dst.exists():
+                            log(f"  [{i}/{len(files)}] {src.name} (skipped, exists)\n")
+                            continue
+                        try:
+                            log(f"  [{i}/{len(files)}] {src.name} (inkscape export)\n")
+                            from .stages.export import export_svg
+                            export_svg(inkscape, src, dst, s.export_width, s.export_area_drawing, s.export_format)
+                            count += 1
+                        except Exception as e:
+                            log(f"  ERROR: {src.name}: {e}\n")
+                            result.failed_files.append(src.name)
+                    result.stage_stats["export"] = count
 
     if s.handle_ico and ico_map:
         src_raster_dir = _choose_last_raster_dir(output_root, s)

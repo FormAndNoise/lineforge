@@ -65,7 +65,7 @@ class Settings:
     output_dir_svg: str = "03_svg"
     output_dir_export: str = "04_export_png"
     export_format: str = "png"
-    recent_inputs: list = None  # type: ignore
+    recent_inputs: list | None = None
     strict_mode: bool = False  # If True, fail on missing deps; if False, warn and skip stages
 
     def __post_init__(self):

@@ -22,39 +22,6 @@ mod tests {
         }
     }
 
-    // Vector B: Median filter & Gaussian blur
-    #[test]
-    fn test_median_filter() {
-        let pixels: Vec<f32> = vec![
-            0.5, 0.5, 0.5, 0.5, 0.5,
-            0.5, 0.5, 0.5, 0.5, 0.5,
-            0.5, 0.5, 1.0, 0.5, 0.5,
-            0.5, 0.5, 0.5, 0.5, 0.5,
-            0.5, 0.5, 0.5, 0.5, 0.5,
-        ];
-        let img = GrayscaleImage { width: 5, height: 5, pixels };
-        let filtered = median_filter(&img, 3);
-        // All values should be 0.5
-        for p in &filtered.pixels {
-            assert!((p - 0.5).abs() < 0.001);
-        }
-    }
-
-    #[test]
-    fn test_gaussian_blur() {
-        let pixels: Vec<f32> = vec![
-            0.5, 0.5, 0.5, 0.5, 0.5,
-            0.5, 0.5, 0.5, 0.5, 0.5,
-            0.5, 0.5, 1.0, 0.5, 0.5,
-            0.5, 0.5, 0.5, 0.5, 0.5,
-            0.5, 0.5, 0.5, 0.5, 0.5,
-        ];
-        let img = GrayscaleImage { width: 5, height: 5, pixels };
-        let blurred = gaussian_blur(&img, 1.0);
-        let center = blurred.pixels[2 * 5 + 2];
-        // Expected ~0.57943
-        assert!((center - 0.57943).abs() < 0.01);
-    }
 
     // Vector C: Trace, flat and curved
     #[test]

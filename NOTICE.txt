@@ -1,0 +1,10 @@
+This project bundles Potrace (bin/potrace.exe).
+
+Potrace is licensed under the GNU General Public License, Version 2 (GPLv2).
+The GPLv2 license text is included at: licenses/potrace/COPYING
+
+Upstream Potrace project:
+https://potrace.sourceforge.net/
+
+Contributors / credits:
+See licenses/potrace/AUTHORS
