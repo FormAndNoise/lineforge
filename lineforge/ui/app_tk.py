@@ -167,7 +167,7 @@ class App(ctk.CTk):
     def __init__(self):
         super().__init__()
 
-        self.title("LineForge")
+        self.title("Pantograph")
         self.geometry("1024x700")
         self.minsize(900, 600)
 

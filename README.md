@@ -1,6 +1,6 @@
-# LineForge
+# Pantograph
 
-LineForge is a Windows‑only batch image processing pipeline that now uses a **native Rust engine** (`vpipe-cli`) for all heavy‑lifting. No external binaries such as ImageMagick, Potrace, or Inkscape are required.
+Pantograph is a Windows‑only batch image processing and vectorization pipeline that uses a **native Rust engine** (`vpipe-cli` / `vpipe`) for all heavy‑lifting. No external binaries such as ImageMagick, Potrace, or Inkscape are required.
 
 ## Building and Running the Project
 
